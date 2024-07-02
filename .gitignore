@@ -1,3 +1,5 @@
 *.csv
 /outputs
 *.h5
+*.pkl
+*.png
