@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 # Especifica la carpeta que contiene los archivos
-folder_path = 'Data_GLORY'
+folder_path = 'futuretemp'
 
 # Lista para almacenar los DataFrames
 dataframes = []
@@ -21,6 +21,6 @@ for file_name in os.listdir(folder_path):
 merged_df = pd.concat(dataframes, ignore_index=True)
 
 # Guardar el DataFrame resultante en un archivo CSV llamado data.csv
-merged_df.to_csv('data.csv', index=False)
+merged_df.to_csv('future_data.csv', index=False)
 
 print("Archivos combinados y guardados en 'data.csv'.")
