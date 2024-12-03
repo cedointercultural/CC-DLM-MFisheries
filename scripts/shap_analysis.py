@@ -1,6 +1,11 @@
 import pandas as pd
 import os
-
+import numpy as np
+import joblib
+import shap
+from tensorflow.keras.models import load_model
+import gc
+import sys
 
 def run_shap_analysis(species, cluster, prepared_data, model_path, scaler_path):
     """
@@ -15,13 +20,7 @@ def run_shap_analysis(species, cluster, prepared_data, model_path, scaler_path):
 
     Returns:
         dict: Analysis results with species, cluster, and mean SHAP values.
-    """
-    import numpy as np
-    import joblib
-    import shap
-    from tensorflow.keras.models import load_model
-    
-
+    """  
     # Features used in the model (same as in `prepare_future_data`)
     features = [
         'landed_w_kg', 'Cluster_Label', 'mean_temp_30m', 'mean_temp_10m',
@@ -73,10 +72,13 @@ def run_shap_analysis(species, cluster, prepared_data, model_path, scaler_path):
 
     except Exception as e:
         raise RuntimeError(f"SHAP analysis failed: {str(e)}") from e
-    
 
+    finally:
+        # Ensure model is closed and memory is freed
+        del model
+        gc.collect()
 
-def evaluate_all_models(models_folder, future_data_file, shap_analysis_function):
+def evaluate_all_models(models_folder, future_data_file, shap_analysis_function, output_csv='shap_analysis_results.csv', verbose=True):
     """
     Evaluate all models in a specified folder and generate a list of SHAP values for each model.
 
@@ -84,22 +86,25 @@ def evaluate_all_models(models_folder, future_data_file, shap_analysis_function)
         models_folder (str): Path to the folder containing model files.
         future_data_file (str): Path to the future data CSV.
         shap_analysis_function (callable): Function to perform SHAP analysis.
+        output_csv (str): Path to the output CSV file.
+        verbose (bool): Whether to print progress to console.
 
     Returns:
-        pd.DataFrame: DataFrame containing cluster, species, and SHAP values for each feature.
+        None: Results are written directly to a CSV file.
     """
-    import os
-    import pandas as pd
-
     # List all model files in the folder
     model_files = [f for f in os.listdir(models_folder) if f.endswith('.h5')]
-
-    # Initialize a list to store results
-    shap_results = []
+    total_models = len(model_files)
 
     # Loop through each model file
-    for model_file in model_files:
+    for idx, model_file in enumerate(model_files, 1):
         try:
+            # Calculate and display progress percentage
+            progress_percentage = (idx / total_models) * 100
+            if verbose:
+                print(f"Processing model {idx}/{total_models} ({progress_percentage:.2f}%): {model_file}")
+                sys.stdout.flush()
+
             # Extract species and cluster from the filename
             parts = model_file.split('_')
             species = parts[0]
@@ -108,7 +113,7 @@ def evaluate_all_models(models_folder, future_data_file, shap_analysis_function)
             # Paths for model and scaler
             model_path = os.path.join(models_folder, model_file)
 
-            # Eliminar "_model" del nombre y generar el path del escalador
+            # Remove "_model" from name and generate scaler path
             scaler_path = model_path.replace('_model', '').replace('.h5', '_scaler.pkl')
 
             # Check if scaler exists
@@ -129,16 +134,17 @@ def evaluate_all_models(models_folder, future_data_file, shap_analysis_function)
                 scaler_path=scaler_path
             )
 
-            # Append the result to the list
-            shap_results.append(result)
+            # Append the result to the CSV file
+            result_df = pd.DataFrame([result])
+            if not os.path.exists(output_csv):
+                result_df.to_csv(output_csv, index=False)
+            else:
+                result_df.to_csv(output_csv, mode='a', header=False, index=False)
 
         except Exception as e:
             print(f"Error processing model {model_file}: {e}")
 
-    # Convert the results to a DataFrame
-    return pd.DataFrame(shap_results)
-
-
+    print("All models processed.")
 
 def prepare_future_data(future_data, cluster, column_name_mapping=None):
     """
